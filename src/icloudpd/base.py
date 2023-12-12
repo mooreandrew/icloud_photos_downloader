@@ -13,6 +13,7 @@ import json
 from typing import Callable, Optional, TypeVar, cast
 import urllib
 import click
+from future.moves.urllib.parse import urlencode
 
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -141,7 +142,7 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
     help="Folder structure (default: {:%Y/%m/%d}). "
     "If set to 'none' all photos will just be placed into the download directory",
     metavar="<folder_structure>",
-    default="{:%Y/%m/%d}",
+    default="{:%Y%m - %B %Y}",
 )
 @click.option(
     "--set-exif-datetime",
@@ -235,6 +236,18 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
               is_flag=True,
               default=False,
               )
+@click.option('--delete-if-downloaded',
+              help='Delete the file after downloading',
+              is_flag=False)
+@click.option('--download-delete-age',
+              help='Specify the age of the file you want to delete in days.' + \
+                   '(Only used if --delete-if-downloaded is set)',
+              type=click.IntRange(0),
+              default=30)
+@click.option('--download-suffix',
+              help='Set the suffix of the download file',
+              default='')
+
 # a hacky way to get proper version because automatic detection does not work for some reason
 @click.version_option(version="1.16.3")
 # pylint: disable-msg=too-many-arguments,too-many-statements
@@ -273,7 +286,10 @@ def main(
         delete_after_download: bool,
         domain: str,
         watch_with_interval: Optional[int],
-        dry_run: bool
+        dry_run: bool,
+        delete_if_downloaded,
+        download_delete_age,
+        download_suffix
 ):
     """Download all iCloud photos to a local directory"""
 
@@ -405,6 +421,8 @@ def download_builder(
                     photo.created)
                 created_date = photo.created
 
+            current_date = datetime.datetime.now(datetime.timezone.utc)
+
             try:
                 if folder_structure.lower() == "none":
                     date_path = ""
@@ -460,7 +478,7 @@ def download_builder(
                 download_size = "original"
 
             download_path = local_download_path(
-                photo, download_size, download_dir)
+                photo, download_size, download_dir, download_suffix)
 
             original_download_path = None
             file_exists = os.path.isfile(download_path)
@@ -494,6 +512,9 @@ def download_builder(
                         "%s already exists",
                         truncate_middle(download_path, 96)
                     )
+
+                if delete_if_downloaded and (current_date - created_date).days >  download_delete_age:
+                    move_picture_to_recently_deleted(icloud, photo)
 
             if not file_exists:
                 counter.reset()
@@ -533,6 +554,11 @@ def download_builder(
                             )
                         if not dry_run:
                             download.set_utime(download_path, created_date)
+
+
+                            if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
+                                move_picture_to_recently_deleted(icloud, photo)
+
                         logger.info(
                             "Downloaded %s",
                             truncated_path
@@ -924,3 +950,29 @@ def core(
                 break  # pragma: no cover
 
     return 0
+
+
+def move_picture_to_recently_deleted(icloud, photo):
+    url = '{}/records/modify?{}'.format(icloud.photos._service_endpoint, urlencode(icloud.photos.params))
+    headers = {'Content-type': 'text/plain'}
+
+    mr = {'fields': {'isDeleted': {'value': 1}}}
+    mr['recordChangeTag'] = photo._asset_record['recordChangeTag']
+    mr['recordName'] = photo._asset_record['recordName']
+
+    mr['recordType'] = 'CPLAsset'
+    op = dict(
+        operationType='update',
+        record=mr,
+    )
+    operations = []
+    operations.append(op)
+
+    post_data = json.dumps(dict(
+        atomic=True,
+        desiredKeys=['isDeleted'],
+        operations=operations,
+        zoneID={'zoneName': 'PrimarySync'},
+    ))
+
+    icloud.photos.session.post(url, data=post_data, headers=headers).json()
