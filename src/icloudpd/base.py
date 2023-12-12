@@ -293,9 +293,6 @@ def main(
 ):
     """Download all iCloud photos to a local directory"""
 
-    print(download_suffix)
-
-    die
 
     logging.basicConfig(
         format="%(asctime)s %(levelname)-8s %(message)s",
@@ -346,7 +343,10 @@ def main(
                     set_exif_datetime,
                     skip_live_photos,
                     live_photo_size,
-                    dry_run) if directory is not None else (lambda _s: lambda _c, _p: False),
+                    dry_run,
+                    delete_if_downloaded, 
+                    download_delete_age,
+                    download_suffix) if directory is not None else (lambda _s: lambda _c, _p: False),
                 directory,
                 username,
                 password,
@@ -395,7 +395,10 @@ def download_builder(
         set_exif_datetime: bool,
         skip_live_photos: bool,
         live_photo_size: str,
-        dry_run: bool) -> Callable[[PyiCloudService], Callable[[Counter, PhotoAsset], bool]]:
+        dry_run: bool,
+        delete_if_downloaded: bool,
+        download_delete_age: int,
+        download_suffix: str) -> Callable[[PyiCloudService], Callable[[Counter, PhotoAsset], bool]]:
     """factory for downloader"""
     def state_(icloud: PyiCloudService) -> Callable[[Counter, PhotoAsset], bool]:
         def download_photo_(counter: Counter, photo: PhotoAsset) -> bool:
