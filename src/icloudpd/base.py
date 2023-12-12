@@ -287,9 +287,9 @@ def main(
         domain: str,
         watch_with_interval: Optional[int],
         dry_run: bool,
-        delete_if_downloaded,
-        download_delete_age,
-        download_suffix
+        delete_if_downloaded: bool,
+        download_delete_age: int,
+        download_suffix: str,
 ):
     """Download all iCloud photos to a local directory"""
 
