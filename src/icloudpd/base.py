@@ -293,6 +293,10 @@ def main(
 ):
     """Download all iCloud photos to a local directory"""
 
+print(download_suffix)
+
+die
+
     logging.basicConfig(
         format="%(asctime)s %(levelname)-8s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
