@@ -533,6 +533,19 @@ class DownloadMediaSuccess:
 
     pass
 
+# Download media ADTs (for download.py)
+@dataclass(frozen=True)
+class DownloadMediaSuccessDelete:
+    """Media downloaded successfully."""
+
+    pass
+
+@dataclass(frozen=True)
+class DownloadMediaSkippedelete:
+    """Media download skipped (file already exists or was filtered)."""
+
+    pass
+
 
 @dataclass(frozen=True)
 class DownloadMediaSkipped:

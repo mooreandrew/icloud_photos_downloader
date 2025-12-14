@@ -81,6 +81,8 @@ from pyicloud_ipd.response_types import (
     DownloadMediaResult,
     DownloadMediaSkipped,
     DownloadMediaSuccess,
+    DownloadMediaSuccessDelete,
+    DownloadMediaSkippedelete, 
     LibrariesAccessSuccess,
     PhotoIterationComplete,
     PhotoIterationResult,
@@ -743,9 +745,6 @@ def download_builder(
                 counter.increment()
                 logger.debug("%s already exists", truncate_middle(download_path, 96))
 
-                if delete_if_downloaded and (current_date - created_date).days >  download_delete_age:
-                    move_picture_to_recently_deleted(icloud, photo)
-
         if not file_exists:
             counter.reset()
             if only_print_filenames:
@@ -791,10 +790,6 @@ def download_builder(
                             )
                         if not dry_run:
                             download.set_utime(download_path, created_date)
-
-                            if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
-                                move_picture_to_recently_deleted(icloud, photo)
-
 
                         logger.info("Downloaded %s", truncated_path)
                     case _:
@@ -893,6 +888,14 @@ def download_builder(
                                 case _:
                                     # Keep existing error
                                     pass
+
+                    match last_result:
+                        case DownloadMediaSuccess()
+                            if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
+                                last_result = DownloadMediaSuccessDelete()
+                        case DownloadMediaSkipped():
+                                last_result = DownloadMediaSkippedelete()
+
     return last_result
 
 def move_picture_to_recently_deleted(icloud, photo):
@@ -1425,6 +1428,10 @@ def core_single_run(
                                     case DownloadMediaSkipped():
                                         # File was skipped (already exists) - don't delete
                                         pass
+                                    case DownloadMediaSuccessDelete():
+                                        should_delete = True
+                                    case DownloadMediaSkippedDelete():
+                                        should_delete = True
                                     case Response2SARequired(account_name):
                                         return Response2SARequired(account_name)
                                     case ResponseServiceNotActivated(reason, code):
