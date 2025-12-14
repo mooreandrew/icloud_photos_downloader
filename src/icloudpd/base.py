@@ -888,7 +888,7 @@ def download_builder(
                                 case _:
                                     # Keep existing error
                                     pass
-                   logger.debug("Download last result of %s", last_result)
+                    logger.debug("Download last result of %s", last_result)
      
                     match last_result:
                         case DownloadMediaSuccess():
