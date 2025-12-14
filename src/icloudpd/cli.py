@@ -258,7 +258,7 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
         action="store_true",
     )
     cloned.add_argument(
-        "--delete-if-downloaded'",
+        "--delete-if-downloaded",
         help='Delete the file after downloading',
         type=bool,
         default=False
@@ -271,7 +271,7 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
         type=int,
     )
     cloned.add_argument(
-        "--download-suffix'",
+        "--download-suffix",
         help='Set the suffix of the download file',
         default=""
     )
