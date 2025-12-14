@@ -266,7 +266,7 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
     cloned.add_argument(
         "--download-delete-age",
         help='Specify the age of the file you want to delete in days.' + \
-            '(Only used if --delete-if-downloaded is set)',        type=int,
+            '(Only used if --delete-if-downloaded is set)',
         default=30,
         type=int,
     )
@@ -493,6 +493,11 @@ def map_to_config(user_ns: argparse.Namespace) -> UserConfig:
         skip_created_before=user_ns.skip_created_before,
         skip_created_after=user_ns.skip_created_after,
         skip_photos=user_ns.skip_photos,
+
+        delete_if_downloaded=user_ns.delete_if_downloaded,
+        download_delete_age=user_ns.download_delete_age,
+        download_suffix=user_ns.download_suffix,
+
     )
 
 
