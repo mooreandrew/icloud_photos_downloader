@@ -1,32 +1,53 @@
-FROM python:3.12-alpine3.18 as build
-
+FROM alpine:3.18 AS runtime_amd64_none
+ENV MUSL_LOCPATH="/usr/share/i18n/locales/musl"
+RUN apk update && apk add --no-cache tzdata musl-locales musl-locales-lang
 WORKDIR /app
+COPY dist/icloud-*.*.*-linux-musl-amd64 icloud
+COPY dist/icloudpd-*.*.*-linux-musl-amd64 icloudpd
 
-ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+FROM alpine:3.18 AS runtime_arm64_none
+ENV MUSL_LOCPATH="/usr/share/i18n/locales/musl"
+RUN apk update && apk add --no-cache tzdata musl-locales musl-locales-lang
+WORKDIR /app
+COPY dist/icloud-*.*.*-linux-musl-arm64 icloud
+COPY dist/icloudpd-*.*.*-linux-musl-arm64 icloudpd
 
-RUN set -xe \
-  && apk update \
-  && apk add git curl binutils gcc libc-dev libffi-dev cargo zlib-dev openssl-dev
+FROM alpine:3.18 AS runtime_arm_v7
+ENV MUSL_LOCPATH="/usr/share/i18n/locales/musl"
+RUN apk update && apk add --no-cache tzdata musl-locales musl-locales-lang
+WORKDIR /app
+COPY dist/icloud-*.*.*-linux-musl-arm32v7 icloud
+COPY dist/icloudpd-*.*.*-linux-musl-arm32v7 icloudpd
 
-COPY pyproject.toml .
-COPY src src
-
-RUN pip3 install -e .[dev]
-
-RUN pyinstaller -y --collect-all keyrings.alt --hidden-import pkgutil --collect-all tzdata --onefile src/starters/icloudpd_ex.py
-
-FROM alpine:3.18 as runtime
-
-RUN apk add --no-cache tzdata
-
+FROM runtime_${TARGETARCH}_${TARGETVARIANT:-none} AS runtime
 ENV TZ=UTC
-
+EXPOSE 8080
 WORKDIR /app
+RUN chmod +x /app/icloud /app/icloudpd
 
-COPY --from=build /app/dist/icloudpd_ex .
+# Use a shell script to allow command selection
+COPY <<EOF /app/entrypoint.sh
+#!/bin/sh
+# If first argument is 'icloud' or 'icloudpd', run the corresponding binary
+case "\$1" in
+    icloud)
+        shift
+        exec /app/icloud "\$@"
+        ;;
+    icloudpd)
+        shift
+        exec /app/icloudpd "\$@"
+        ;;
+    *)
+        echo "Error: You must specify either 'icloud' or 'icloudpd' as the first argument."
+        echo "Usage: docker run <image> icloudpd [options]"
+        echo "   or: docker run <image> icloud [options]"
+        exit 1
+        ;;
+esac
+EOF
 
-ENTRYPOINT ["/app/icloudpd_ex"]
+RUN chmod +x /app/entrypoint.sh
 
-# RUN set -xe \
-#   && ln -s /app/icloudpd /usr/local/bin/icloudpd \
-#   && ln -s /app/icloud /usr/local/bin/icloud 
+# Default entrypoint allows command selection
+ENTRYPOINT ["/app/entrypoint.sh"]

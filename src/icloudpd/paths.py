@@ -1,41 +1,33 @@
 """Path functions"""
+
 import os
 
 
-def clean_filename(filename):
+def remove_unicode_chars(value: str) -> str:
+    """Removes unicode chars from the string"""
+    result = value.encode("utf-8").decode("ascii", "ignore")
+    return result
+
+
+def clean_filename(filename: str) -> str:
     """Replaces invalid chars in filenames with '_'"""
-    result = filename.encode(
-        "utf-8").decode("ascii", "ignore")
     invalid = '<>:"/\\|?*\0'
+    result = filename
 
     for char in invalid:
-        result = result.replace(char, '_')
+        result = result.replace(char, "_")
 
     return result
 
 
-def local_download_path(media, size, download_dir, download_suffix):
+def local_download_path(filename: str, download_dir: str, download_suffix: str) -> str:
     """Returns the full download path, including size"""
-    filename = filename_with_size(media, size, download_suffix)
-    download_path = os.path.join(download_dir, filename)
-    return download_path
 
-
-def filename_with_size(media, size, download_suffix):
-    """Returns the filename with size, e.g. IMG1234.jpg, IMG1234-small.jpg"""
-    # Strip any non-ascii characters.
-    # filename = clean_filename(media.filename)
-    # if size == 'original':
-    #     return filename
-    # return (f"-{size}.").join(filename.rsplit(".", 1))
-
+    suffix = ''
     if download_suffix:
-            download_suffix = '-' + download_suffix
+        suffix = '-' + download_suffix
 
-        # filename = media.filename.encode("utf-8").decode("ascii", "ignore")
-        # if size == 'original':
-        #     return filename
-        # return ("-%s." % size).join(filename.rsplit(".", 1))
+    _n, _e = os.path.splitext(filename)
 
-    return media.filename.encode('utf-8') \
-        .decode('ascii', 'ignore').replace('.', '-%s%s.' % (size, download_suffix))
+    download_path = os.path.join(download_dir, _n + suffix + _e)
+    return download_path

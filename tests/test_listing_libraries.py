@@ -1,87 +1,67 @@
-from unittest import TestCase
-import pytest
-from vcr import VCR
-import os
-import shutil
-import click
-from click.testing import CliRunner
-import json
-import mock
-from icloudpd.base import main
-from tests.helpers import path_from_project_root, print_result_exception, recreate_path
 import inspect
-import glob
+import os
+from unittest import TestCase
 
-vcr = VCR(decode_compressed_response=True)
+import pytest
+
+from tests.helpers import (
+    path_from_project_root,
+    run_icloudpd_test,
+)
+
 
 class ListingLibraryTestCase(TestCase):
-
     @pytest.fixture(autouse=True)
-    def inject_fixtures(self, caplog):
-        self._caplog = caplog
+    def inject_fixtures(self) -> None:
         self.root_path = path_from_project_root(__file__)
         self.fixtures_path = os.path.join(self.root_path, "fixtures")
-        self.vcr_path = os.path.join(self.root_path, "vcr_cassettes")
 
-    def test_listing_library(self):
+    def test_listing_library(self) -> None:
         base_dir = os.path.join(self.fixtures_path, inspect.stack()[0][3])
-        recreate_path(base_dir)
+        _, result = run_icloudpd_test(
+            self.assertEqual,
+            self.root_path,
+            base_dir,
+            "listing_albums.yml",
+            [],
+            [],
+            [
+                "--username",
+                "jdoe@gmail.com",
+                "--password",
+                "password1",
+                "--list-libraries",
+                "--no-progress-bar",
+            ],
+        )
+        self.assertEqual(result.exit_code, 0, "exit code")
+        albums = result.output.splitlines()
 
-        with vcr.use_cassette(os.path.join(self.vcr_path, "listing_albums.yml")):
-            # Pass fixed client ID via environment variable
-            runner = CliRunner(env={
-                "CLIENT_ID": "DE309E26-942E-11E8-92F5-14109FE0B321"
-            })
-            result = runner.invoke(
-                main,
-                [
-                    "--username",
-                    "jdoe@gmail.com",
-                    "--password",
-                    "password1",
-                    "--list-libraries",
-                    "--no-progress-bar"
-                ],
-            )
+        self.assertIn("PrimarySync", albums)
+        self.assertIn("SharedSync-00000000-1111-2222-3333-444444444444", albums)
 
-            print_result_exception(result)
-            albums = result.output.splitlines()
-
-            self.assertIn("PrimarySync", albums)
-#            self.assertIn("WhatsApp", albums)
-
-            assert result.exit_code == 0
-
-    def test_listing_library_error(self):
+    def test_listing_library_error(self) -> None:
         base_dir = os.path.join(self.fixtures_path, inspect.stack()[0][3])
-        recreate_path(base_dir)
 
-        with vcr.use_cassette(os.path.join(self.vcr_path, "listing_albums.yml")):
-            # Pass fixed client ID via environment variable
-            runner = CliRunner(env={
-                "CLIENT_ID": "DE309E26-942E-11E8-92F5-14109FE0B321"
-            })
-            result = runner.invoke(
-                main,
-                [
-                    "--username",
-                    "jdoe@gmail.com",
-                    "--password",
-                    "password1",
-                    "--library",
-                    "doesnotexist",
-                    "--no-progress-bar",
-                    "-d",
-                    base_dir
-                ],
-            )
-
-            print_result_exception(result)
-            
-            self.assertIn(
-                "ERROR    Unknown library: doesnotexist",
-                self._caplog.text,
-            )
-            
-
-            assert result.exit_code == 1
+        _, result = run_icloudpd_test(
+            self.assertEqual,
+            self.root_path,
+            base_dir,
+            "listing_albums.yml",
+            [],
+            [],
+            [
+                "--username",
+                "jdoe@gmail.com",
+                "--password",
+                "password1",
+                "--library",
+                "doesnotexist",
+                "--no-progress-bar",
+            ],
+        )
+        self.assertEqual(result.exit_code, 1, "exit code")
+        self.assertIn(
+            "Unknown library: doesnotexist",
+            result.output,
+        )
