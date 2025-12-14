@@ -541,7 +541,7 @@ class DownloadMediaSuccessDelete:
     pass
 
 @dataclass(frozen=True)
-class DownloadMediaSkippedelete:
+class DownloadMediaSkippedDelete:
     """Media download skipped (file already exists or was filtered)."""
 
     pass
