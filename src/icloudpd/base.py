@@ -890,7 +890,7 @@ def download_builder(
                                     pass
 
                     match last_result:
-                        case DownloadMediaSuccess()
+                        case DownloadMediaSuccess():
                             if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
                                 last_result = DownloadMediaSuccessDelete()
                         case DownloadMediaSkipped():
