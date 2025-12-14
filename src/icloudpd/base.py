@@ -745,6 +745,9 @@ def download_builder(
                 counter.increment()
                 logger.debug("%s already exists", truncate_middle(download_path, 96))
 
+            if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
+                last_result = DownloadMediaSkippedelete()
+
         if not file_exists:
             counter.reset()
             if only_print_filenames:
@@ -795,6 +798,16 @@ def download_builder(
                     case _:
                         # Error ADT - store it
                         last_result = download_result
+
+                logger.debug("Download last result of %s", last_result)
+     
+                match last_result:
+                    case DownloadMediaSuccess():
+                        if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
+                            last_result = DownloadMediaSuccessDelete()
+                    case DownloadMediaSkipped():
+                            last_result = DownloadMediaSkippedelete()
+
 
         if xmp_sidecar:
             generate_xmp_file(logger, download_path, photo._asset_record, dry_run)
@@ -896,6 +909,9 @@ def download_builder(
                                 last_result = DownloadMediaSuccessDelete()
                         case DownloadMediaSkipped():
                                 last_result = DownloadMediaSkippedelete()
+
+    logger.info("Returnung %s", last_result)
+
 
     return last_result
 
