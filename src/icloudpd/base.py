@@ -792,7 +792,7 @@ def download_builder(
                         if not dry_run:
                             download.set_utime(download_path, created_date)
 
-                           if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
+                            if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
                                 move_picture_to_recently_deleted(icloud, photo)
 
 
