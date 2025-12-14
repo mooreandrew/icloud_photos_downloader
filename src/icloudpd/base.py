@@ -82,7 +82,7 @@ from pyicloud_ipd.response_types import (
     DownloadMediaSkipped,
     DownloadMediaSuccess,
     DownloadMediaSuccessDelete,
-    DownloadMediaSkippedelete, 
+    DownloadMediaSkippedDelete, 
     LibrariesAccessSuccess,
     PhotoIterationComplete,
     PhotoIterationResult,
