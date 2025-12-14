@@ -888,7 +888,8 @@ def download_builder(
                                 case _:
                                     # Keep existing error
                                     pass
-
+                   logger.debug("Download last result of %s", last_result)
+     
                     match last_result:
                         case DownloadMediaSuccess():
                             if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
