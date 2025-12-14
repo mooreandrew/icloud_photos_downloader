@@ -746,7 +746,7 @@ def download_builder(
                 logger.debug("%s already exists", truncate_middle(download_path, 96))
 
             if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
-                last_result = DownloadMediaSkippedelete()
+                last_result = DownloadMediaSkippedDelete()
 
         if not file_exists:
             counter.reset()
@@ -806,7 +806,7 @@ def download_builder(
                         if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
                             last_result = DownloadMediaSuccessDelete()
                     case DownloadMediaSkipped():
-                            last_result = DownloadMediaSkippedelete()
+                            last_result = DownloadMediaSkippedDelete()
 
 
         if xmp_sidecar:
@@ -908,7 +908,7 @@ def download_builder(
                             if delete_if_downloaded and (current_date - created_date).days > download_delete_age:
                                 last_result = DownloadMediaSuccessDelete()
                         case DownloadMediaSkipped():
-                                last_result = DownloadMediaSkippedelete()
+                                last_result = DownloadMediaSkippedDelete()
 
     logger.info("Returnung %s", last_result)
 
