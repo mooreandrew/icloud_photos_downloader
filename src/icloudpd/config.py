@@ -49,10 +49,10 @@ class _DefaultConfig:
     file_match_policy: FileMatchPolicy
     skip_created_before: datetime.datetime | datetime.timedelta | None
     skip_created_after: datetime.datetime | datetime.timedelta | None
-    skip_photos: bool
+    skip_photos: bool,
     delete_if_downloaded: bool,
     download_delete_age: int,
-    download_suffix: str,
+    download_suffix: str
 
 @dataclass(kw_only=True)
 class UserConfig(_DefaultConfig):
