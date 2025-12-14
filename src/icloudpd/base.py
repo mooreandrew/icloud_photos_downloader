@@ -915,29 +915,6 @@ def download_builder(
 
     return last_result
 
-def move_picture_to_recently_deleted(icloud, photo):
-    url = '{}/records/modify?{}'.format(icloud.photos._service_endpoint, urlencode(icloud.photos.params))
-    headers = {'Content-type': 'text/plain'}
-
-    mr = {'fields': {'isDeleted': {'value': 1}}}
-    mr['recordChangeTag'] = photo._asset_record['recordChangeTag']
-    mr['recordName'] = photo._asset_record['recordName']
-
-    mr['recordType'] = 'CPLAsset'
-    op = dict(
-        operationType='update',
-        record=mr,
-    )
-    operations = []
-    operations.append(op)
-
-    post_data = json.dumps(dict(
-        atomic=True,
-        desiredKeys=['isDeleted'],
-        operations=operations,
-        zoneID={'zoneName': 'PrimarySync'},
-    ))
-
 def delete_photo(
     logger: logging.Logger,
     library_object: PhotoLibrary,
