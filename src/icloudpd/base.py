@@ -581,7 +581,7 @@ def download_builder(
     icloud: PyiCloudService,
     counter: Counter,
     photo: PhotoAsset,
-    download_suffix: String,
+    download_suffix: str,
 ) -> bool:
     """function for actually downloading the photos"""
 
