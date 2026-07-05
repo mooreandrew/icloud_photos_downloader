@@ -22,5 +22,7 @@ def clean_filename(filename: str) -> str:
 
 def local_download_path(filename: str, download_dir: str, download_suffix: str) -> str:
     """Returns the full download path, including size"""
-    download_path = os.path.join(download_dir, filename, download_suffix)
+
+    filename2 = filename.splt('.')[0] + download_suffix + filename.splt('.')[1]
+    download_path = os.path.join(download_dir, filename2)
     return download_path
