@@ -262,13 +262,7 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
         default='',
         type=str,
     )
-    cloned.add_argument(
-        "--download-suffix",
-        help="Set the suffix of the download file Default: empty",
-        default='',
-        type=str,
-    )
-
+    
     return cloned
 
 
