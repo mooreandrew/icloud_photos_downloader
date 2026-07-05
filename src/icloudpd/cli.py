@@ -133,7 +133,7 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
     cloned.add_argument(
         "--folder-structure",
         help="Folder structure. If set to `none`, all photos will be placed into the download directory. Default: %(default)s",
-        default="{:%Y/%m/%d}",
+        default="{:%Y%m - %B %Y}",
         type=validate_folder_structure,
     )
     cloned.add_argument(
@@ -256,6 +256,19 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
         help="Don't download any photos (default: download all photos and videos)",
         action="store_true",
     )
+    cloned.add_argument(
+        "--download-suffix",
+        help="Set the suffix of the download file Default: empty",
+        default='',
+        type=str,
+    )
+    cloned.add_argument(
+        "--download-suffix",
+        help="Set the suffix of the download file Default: empty",
+        default='',
+        type=str,
+    )
+
     return cloned
 
 
