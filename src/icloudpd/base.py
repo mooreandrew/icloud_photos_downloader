@@ -413,8 +413,8 @@ def _process_all_users_once(
                     user_config.xmp_sidecar,
                     lp_filename_generator,
                     filename_builder,
-                    user_config.align_raw,
                     user_config.download_suffix,
+                    user_config.align_raw,
                 )
                 if user_config.directory is not None
                 else (lambda _s, _c, _p: False)
@@ -577,11 +577,11 @@ def download_builder(
     xmp_sidecar: bool,
     lp_filename_generator: Callable[[str], str],
     filename_builder: Callable[[PhotoAsset], str],
+    download_suffix: str,
     raw_policy: RawTreatmentPolicy,
     icloud: PyiCloudService,
     counter: Counter,
     photo: PhotoAsset,
-    download_suffix: str,
 ) -> bool:
     """function for actually downloading the photos"""
 
