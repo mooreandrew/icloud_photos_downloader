@@ -414,6 +414,7 @@ def _process_all_users_once(
                     lp_filename_generator,
                     filename_builder,
                     user_config.align_raw,
+                    user_config.download_suffix,
                 )
                 if user_config.directory is not None
                 else (lambda _s, _c, _p: False)
@@ -580,6 +581,7 @@ def download_builder(
     icloud: PyiCloudService,
     counter: Counter,
     photo: PhotoAsset,
+    download_suffix: String,
 ) -> bool:
     """function for actually downloading the photos"""
 
@@ -659,7 +661,7 @@ def download_builder(
             filename_overrides.get(download_size),
         )
 
-        download_path = local_download_path(filename, download_dir)
+        download_path = local_download_path(filename, download_dir, download_suffix)
 
         original_download_path = None
         file_exists = os.path.isfile(download_path)
