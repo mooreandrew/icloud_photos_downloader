@@ -754,7 +754,10 @@ def download_builder(
                 )
             else:
                 pass
-            lp_download_path = os.path.join(download_dir, lp_filename)
+            
+            lp_filename2 = lp_filename.split('.')[0] + '-' + download_suffix + '.' + lp_filename.split('.')[1]
+            lp_download_path = os.path.join(download_dir, lp_filename2)
+
 
             lp_file_exists = os.path.isfile(lp_download_path)
 
