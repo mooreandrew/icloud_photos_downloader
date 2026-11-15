@@ -433,6 +433,7 @@ def _process_all_users_once(
                     user_config.xmp_sidecar,
                     lp_filename_generator,
                     filename_builder,
+                    user_config.download_suffix,
                     user_config.align_raw,
                 )
                 if user_config.directory is not None
@@ -626,6 +627,7 @@ def download_builder(
     xmp_sidecar: bool,
     lp_filename_generator: Callable[[str], str],
     filename_builder: Callable[[PhotoAsset], str],
+    download_suffix: str,
     raw_policy: RawTreatmentPolicy,
     icloud: PyiCloudService,
     counter: Counter,
@@ -723,7 +725,7 @@ def download_builder(
             filename_overrides.get(download_size),
         )
 
-        download_path = local_download_path(filename, download_dir)
+        download_path = local_download_path(filename, download_dir, download_suffix)
 
         if inspect_only:
             expected_paths.append(download_path)
@@ -845,8 +847,9 @@ def download_builder(
                 )
             else:
                 pass
-            lp_download_path = os.path.join(download_dir, lp_filename)
-
+            lp_filename2 = lp_filename.split('.')[0] + '-' + download_suffix + '.' + lp_filename.split('.')[1]
+            lp_download_path = os.path.join(download_dir, lp_filename2)
+            
             if inspect_only:
                 expected_paths.append(lp_download_path)
                 if file_match_policy == FileMatchPolicy.NAME_SIZE_DEDUP_WITH_SUFFIX:

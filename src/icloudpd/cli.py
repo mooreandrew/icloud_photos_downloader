@@ -153,7 +153,7 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
     cloned.add_argument(
         "--folder-structure",
         help="Folder structure. If set to `none`, all photos will be placed into the download directory. Default: %(default)s",
-        default="{:%Y/%m/%d}",
+        default="{:%Y%m - %B %Y}",
         type=validate_folder_structure,
     )
     cloned.add_argument(
@@ -275,6 +275,12 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
         "--skip-photos",
         help="Don't download any photos (default: download all photos and videos)",
         action="store_true",
+    )
+    cloned.add_argument(
+        "--download-suffix",
+        help="Set the suffix of the download file Default: empty",
+        default='',
+        type=str,
     )
     return cloned
 
@@ -495,6 +501,7 @@ def map_to_config(user_ns: argparse.Namespace) -> UserConfig:
         skip_created_before=user_ns.skip_created_before,
         skip_created_after=user_ns.skip_created_after,
         skip_photos=user_ns.skip_photos,
+        download_suffix=user_ns.download_suffix,
     )
 
 
