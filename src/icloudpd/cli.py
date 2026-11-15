@@ -12,7 +12,7 @@ from tzlocal import get_localzone
 import foundation
 from foundation.core import chain_from_iterable, compose, map_, partial_1_1, skip
 from foundation.string_utils import lower
-from icloudpd.base import ensure_tzinfo, run_with_configs
+from icloudpd.base import ensure_tzinfo, offset_to_datetime, run_with_configs
 from icloudpd.config import GlobalConfig, UserConfig
 from icloudpd.log_level import LogLevel
 from icloudpd.mfa_provider import MFAProvider
@@ -44,6 +44,12 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
     )
     cloned.add_argument(
         "--auth-only", action="store_true", help="Create/update cookie and session tokens only."
+    )
+    cloned.add_argument(
+        "--adp-web-access",
+        action="store_true",
+        help="Request iCloud web access consent for accounts with Advanced Data Protection (ADP). "
+        "Requires approving a notification on an Apple device the first time.",
     )
     cloned.add_argument(
         "--cookie-directory",
@@ -131,9 +137,23 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
         action="store_true",
     )
     cloned.add_argument(
+        "--prune-orphans",
+        help="Move tracked downloads that disappeared from a shared library into .icloudpd-pruned/. "
+        + "Newly written files are tracked by default; existing files require explicit adoption. "
+        + "Requires a dedicated directory and a complete, nonempty library listing.",
+        action="store_true",
+    )
+    cloned.add_argument(
+        "--prune-orphans-adopt-existing",
+        help="On the first successful pruning run, adopt an existing dedicated flat, original-size "
+        + "shared-library mirror and quarantine unmatched media. Declares existing media managed; "
+        + "preview with --dry-run first. Requires --prune-orphans and unchanged naming settings.",
+        action="store_true",
+    )
+    cloned.add_argument(
         "--folder-structure",
         help="Folder structure. If set to `none`, all photos will be placed into the download directory. Default: %(default)s",
-        default="{:%Y%m - %B %Y}",
+        default="{:%Y/%m/%d}",
         type=validate_folder_structure,
     )
     cloned.add_argument(
@@ -256,13 +276,6 @@ def add_options_for_user(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
         help="Don't download any photos (default: download all photos and videos)",
         action="store_true",
     )
-    cloned.add_argument(
-        "--download-suffix",
-        help="Set the suffix of the download file Default: empty",
-        default='',
-        type=str,
-    )
-    
     return cloned
 
 
@@ -441,11 +454,12 @@ def map_to_config(user_ns: argparse.Namespace) -> UserConfig:
         password=user_ns.password,
         directory=user_ns.directory,
         auth_only=user_ns.auth_only,
+        adp_web_access=user_ns.adp_web_access,
         cookie_directory=user_ns.cookie_directory,
         sizes=list(
             map_(AssetVersionSize, foundation.unique_sequence(user_ns.sizes or ["original"]))
         ),
-        live_photo_size=LivePhotoVersionSize(user_ns.live_photo_size),
+        live_photo_size=LivePhotoVersionSize[user_ns.live_photo_size.upper()],
         recent=user_ns.recent,
         until_found=user_ns.until_found,
         albums=user_ns.albums,
@@ -457,6 +471,8 @@ def map_to_config(user_ns: argparse.Namespace) -> UserConfig:
         xmp_sidecar=user_ns.xmp_sidecar,
         force_size=user_ns.force_size,
         auto_delete=user_ns.auto_delete,
+        prune_orphans=user_ns.prune_orphans,
+        prune_orphans_adopt_existing=user_ns.prune_orphans_adopt_existing,
         folder_structure=user_ns.folder_structure,
         set_exif_datetime=user_ns.set_exif_datetime,
         smtp_username=user_ns.smtp_username,
@@ -479,7 +495,6 @@ def map_to_config(user_ns: argparse.Namespace) -> UserConfig:
         skip_created_before=user_ns.skip_created_before,
         skip_created_after=user_ns.skip_created_after,
         skip_photos=user_ns.skip_photos,
-        download_suffix=user_ns.download_suffix,
     )
 
 
@@ -548,9 +563,16 @@ def cli() -> int:
         print(error)
         return 2
     if global_ns.use_os_locale:
-        from locale import LC_ALL, setlocale
+        from locale import LC_ALL, Error, setlocale
 
-        setlocale(LC_ALL, "")
+        try:
+            setlocale(LC_ALL, "")
+        except Error as error:
+            # e.g. LANG/LC_ALL names a locale that isn't installed (common in containers)
+            print(
+                f"Cannot use the system locale ({error}), using the default locale",
+                file=sys.stderr,
+            )
     else:
         pass
     if global_ns.help:
@@ -581,6 +603,63 @@ def cli() -> int:
             )
             return 2
 
+        elif any(
+            user_ns.prune_orphans_adopt_existing
+            and (
+                not user_ns.prune_orphans
+                or user_ns.folder_structure.lower() != "none"
+                or set(user_ns.sizes) != {AssetVersionSize.ORIGINAL}
+                or user_ns.live_photo_size != LivePhotoVersionSize.ORIGINAL
+                or user_ns.skip_live_photos
+                or user_ns.align_raw != RawTreatmentPolicy.AS_IS
+                or user_ns.file_match_policy != FileMatchPolicy.NAME_SIZE_DEDUP_WITH_SUFFIX
+                or user_ns.live_photo_mov_filename_policy != LivePhotoMovFilenamePolicy.SUFFIX
+            )
+            for user_ns in user_nses
+        ):
+            print(
+                "--prune-orphans-adopt-existing requires --prune-orphans, --folder-structure none, "
+                "original photo/video sizes, live photos enabled, --align-raw as-is, "
+                "--file-match-policy name-size-dedup-with-suffix and "
+                "--live-photo-mov-filename-policy suffix"
+            )
+            return 2
+
+        elif any(
+            user_ns.prune_orphans
+            and (
+                user_ns.library == "PrimarySync"
+                or user_ns.delete_after_download
+                or user_ns.keep_icloud_recent_days is not None
+                or global_ns.only_print_filenames
+            )
+            for user_ns in user_nses
+        ):
+            print(
+                "--prune-orphans requires --library and cannot be combined with "
+                "--delete-after-download, --keep-icloud-recent-days or --only-print-filenames"
+            )
+            return 2
+
+        elif any(
+            first.prune_orphans
+            and first.directory
+            and second.directory
+            and (
+                pathlib.Path(first.directory)
+                .resolve()
+                .is_relative_to(pathlib.Path(second.directory).resolve())
+                or pathlib.Path(second.directory)
+                .resolve()
+                .is_relative_to(pathlib.Path(first.directory).resolve())
+            )
+            for first in user_nses
+            for second in user_nses
+            if first is not second
+        ):
+            print("--prune-orphans requires a dedicated, non-overlapping download directory")
+            return 2
+
         elif [
             user_ns
             for user_ns in user_nses
@@ -598,6 +677,30 @@ def cli() -> int:
         ]:
             print(
                 "--keep-icloud-recent-days and --delete-after-download should not be used together in one configuration"
+            )
+            return 2
+
+        elif [
+            user_ns
+            for user_ns in user_nses
+            if user_ns.keep_icloud_recent_days is not None and user_ns.auto_delete
+        ]:
+            # assets --keep-icloud-recent-days moves to Recently Deleted would be deleted locally too
+            print(
+                "--keep-icloud-recent-days and --auto-delete should not be used together in one configuration"
+            )
+            return 2
+
+        elif [
+            user_ns
+            for user_ns in user_nses
+            if user_ns.skip_created_before is not None
+            and user_ns.skip_created_after is not None
+            and offset_to_datetime(user_ns.skip_created_before)
+            > offset_to_datetime(user_ns.skip_created_after)
+        ]:
+            print(
+                "--skip-created-before must be earlier than --skip-created-after, otherwise no assets can match"
             )
             return 2
 

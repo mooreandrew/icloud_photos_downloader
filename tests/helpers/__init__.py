@@ -129,6 +129,7 @@ def clean_boolean_args(params: Sequence[str]) -> list[str]:
     # Boolean flags that don't take values - handle "true"/"false" cleanup
     boolean_flags = {
         "--auth-only",
+        "--adp-web-access",
         "--list-albums",
         "-l",
         "--list-libraries",
@@ -137,6 +138,8 @@ def clean_boolean_args(params: Sequence[str]) -> list[str]:
         "--xmp-sidecar",
         "--force-size",
         "--auto-delete",
+        "--prune-orphans",
+        "--prune-orphans-adopt-existing",
         "--set-exif-datetime",
         "--smtp-no-tls",
         "--delete-after-download",

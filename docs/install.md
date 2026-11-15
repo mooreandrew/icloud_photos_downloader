@@ -1,7 +1,7 @@
 # Install and Run
 
 There are three ways to run `icloudpd`:
-1. Download executable for your platform from the GitHub [Release](https://github.com/icloud-photos-downloader/icloud_photos_downloader/releases/tag/v1.32.3) and run it, e.g.:
+1. Download executable for your platform from the GitHub [Release](https://github.com/icloud-photos-downloader/icloud_photos_downloader/releases/tag/v1.33.0) and run it, e.g.:
 
     ```sh
     icloudpd --username your@email.address --directory photos --watch-with-interval 3600
@@ -101,19 +101,32 @@ yay -S icloudpd-bin
 npx --yes icloudpd --directory /data --username my@email.address --watch-with-interval 3600
 ```
 
+## Linux binaries
+
+Linux binaries are available for amd64, arm64 and arm32v7, in two variants:
+
+- `icloudpd-<version>-linux-<arch>` for distributions based on glibc, e.g. Debian, Ubuntu, Fedora
+- `icloudpd-<version>-linux-musl-<arch>` for distributions based on musl, e.g. Alpine
+
+The musl variant needs musl 1.2.5 or newer, which is Alpine 3.20 and newer. On older Alpine releases it fails to start (`Error relocating ...` or a segmentation fault). The same applies to the musl wheels on PyPI (`musllinux`), which contain the same binary.
+
 ## macOS binary
 
-`icloudpd` is available as an Intel 64-bit binary for macOS, but works on ARM Macs too (M1, M2, M3).
+`icloudpd` is available as a binary for Apple Silicon Macs (`icloudpd-<version>-macos-arm64`) and for Intel Macs (`icloudpd-<version>-macos-amd64`). The Intel binary is built for as long as GitHub provides Intel macOS build machines; on Intel Macs after that, use [Docker](#docker) or [PyPI](#pypi).
 
-Here are the steps to make it work:
+```{note}
+In 1.32.3, `icloudpd-1.32.3-macos-amd64` was built for Apple Silicon by mistake and does not run on Intel Macs (`bad CPU type in executable`). Use 1.32.2 or a later release on Intel Macs.
+```
+
+Here are the steps to make it work (the examples use the Apple Silicon binary):
 - Download the binary from GitHub [Releases](https://github.com/icloud-photos-downloader/icloud_photos_downloader/releases) into the desired local folder
-- Add the executable flag by running `chmod +x icloudpd-1.32.3-macos-amd64`
-- Start it from the terminal: `icloudpd-1.32.3-macos-amd64`
+- Add the executable flag by running `chmod +x icloudpd-1.33.0-macos-arm64`
+- Start it from the terminal: `icloudpd-1.33.0-macos-arm64`
 - Apple will tell you that it cannot check for malicious software and refuse to run the app; click "OK"
-- Open "System Settings"/"Privacy & Security" and find `icloudpd-1.32.3-macos-amd64` as a blocked app; click "Allow"
-- Start `icloudpd-1.32.3-macos-amd64` from the terminal again
+- Open "System Settings"/"Privacy & Security" and find `icloudpd-1.33.0-macos-arm64` as a blocked app; click "Allow"
+- Start `icloudpd-1.33.0-macos-arm64` from the terminal again
 - Apple will show another warning; click "Open"
-- After that, you can run `icloudpd-1.32.3-macos-amd64 --help` or any other supported command/option
+- After that, you can run `icloudpd-1.33.0-macos-arm64 --help` or any other supported command/option
 
 ## Error on the First Run
 

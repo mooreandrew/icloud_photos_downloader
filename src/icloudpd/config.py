@@ -16,6 +16,7 @@ from pyicloud_ipd.version_size import AssetVersionSize, LivePhotoVersionSize
 class _DefaultConfig:
     directory: str
     auth_only: bool
+    adp_web_access: bool
     cookie_directory: str
     sizes: Sequence[AssetVersionSize]
     live_photo_size: LivePhotoVersionSize
@@ -30,6 +31,8 @@ class _DefaultConfig:
     xmp_sidecar: bool
     force_size: bool
     auto_delete: bool
+    prune_orphans: bool = False
+    prune_orphans_adopt_existing: bool = False
     folder_structure: str
     set_exif_datetime: bool
     smtp_username: str | None
@@ -50,7 +53,6 @@ class _DefaultConfig:
     skip_created_before: datetime.datetime | datetime.timedelta | None
     skip_created_after: datetime.datetime | datetime.timedelta | None
     skip_photos: bool
-    download_suffix: str
 
 
 @dataclass(kw_only=True)

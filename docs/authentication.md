@@ -32,11 +32,25 @@ Access to iCloud.com is blocked from mainland China. `icloudpd` can be used with
 
 ## FIDO
 
-Authentication to iCloud with hardware keys (FIDO) is not supported.
+```{versionadded} 1.33.0
+```
+
+Accounts with security keys (FIDO, e.g. YubiKey) don't get a six-digit code. `icloudpd` asks for one of the registered keys instead, which must be plugged into the machine running `icloudpd`.
+
+To use `icloudpd` on a machine without the key, sign in once with [`--auth-only`](auth-only-parameter) where the key is and copy the [`--cookie-directory`](cookie-directory-parameter) over.
+
+The [`webui`](mfa-provider-parameter) MFA provider does not support security keys.
 
 ## ADP
 
-Advanced Data Protection (ADP) for iCloud accounts is not supported because `icloudpd` simulates web access, which is disabled with ADP.
+```{versionadded} 1.33.0
+```
+
+Accounts with Advanced Data Protection (ADP) can be used with the [`--adp-web-access`](adp-web-access-parameter) parameter. It replays the consent sequence that icloud.com performs before showing photos, so it requires `Settings > Apple ID > iCloud > Access iCloud Data on the Web` to be enabled on the Apple device.
+
+The first run sends an approval notification to your Apple devices and waits up to two minutes for it to be accepted. Once approved, later runs (including from other machines or cookie directories) do not ask again.
+
+Without the parameter, an ADP account fails with `ACCESS_DENIED`.
 
 ## Occasional Errors
 
@@ -68,12 +82,14 @@ Default set and order of providers are: *parameter*, *keyring*, *console*
 
 ### Managing System Keyring
 
-You can store your password in the system keyring or delete it from there using the `icloud` command-line tool:
+When `keyring` is one of the password providers (it is by default), `icloudpd` saves the password in the system keyring after a successful sign-in, so later runs don't ask for it again.
+
+You can also store your password in the system keyring, or delete it from there, using the `icloud` command-line tool:
 
 ```
 $ icloud --username jappleseed@apple.com
-ICloud Password for jappleseed@apple.com:
-Save password in keyring? (y/N)
+Enter iCloud password for jappleseed@apple.com:
+Save password in keyring? [y/N]
 ```
 
 If you would like to delete a password stored in your system keyring,

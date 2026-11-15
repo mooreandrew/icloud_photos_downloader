@@ -3,6 +3,7 @@ import copy
 import json
 import logging
 import re
+import time
 import typing
 from datetime import datetime
 from typing import Any, Callable, Dict, Generator, Sequence, Tuple, cast
@@ -110,6 +111,12 @@ def filename_with_fallback(asset_id: str, item_type_extension: str) -> Callable[
 
 
 logger = logging.getLogger(__name__)
+
+INDEXING_STATE_ATTEMPTS = 15
+INDEXING_STATE_RETRY_DELAY_SECONDS = 4
+
+# albumType of a folder in the album list; albums are 0
+FOLDER_ALBUM_TYPE = 3
 
 
 def download_asset(session: Session, url: str, start: int = 0) -> Response:
@@ -292,10 +299,24 @@ class PhotoLibrary:
             }
         )
 
-        request = self.session.post(url, data=json_data, headers={"Content-type": "text/plain"})
-        response = request.json()
-        indexing_state = response["records"][0]["fields"]["state"]["value"]
-        if indexing_state != "FINISHED":
+        # Apple may report RUNNING for a library that is ready, flipping to
+        # FINISHED only on some calls, so re-check before giving up (#1387)
+        for attempt in range(1, INDEXING_STATE_ATTEMPTS + 1):
+            request = self.session.post(url, data=json_data, headers={"Content-type": "text/plain"})
+            response = request.json()
+            indexing_state = response["records"][0]["fields"]["state"]["value"]
+            if indexing_state == "FINISHED":
+                break
+            if attempt < INDEXING_STATE_ATTEMPTS:
+                logger.debug(
+                    "Library indexing state is %s (attempt %d/%d), retrying in %ds",
+                    indexing_state,
+                    attempt,
+                    INDEXING_STATE_ATTEMPTS,
+                    INDEXING_STATE_RETRY_DELAY_SECONDS,
+                )
+                time.sleep(INDEXING_STATE_RETRY_DELAY_SECONDS)
+        else:
             raise PyiCloudServiceNotActivatedException(
                 ("Apple iCloud Photo Library has not finished indexing yet"), None
             )
@@ -314,23 +335,14 @@ class PhotoLibrary:
             for (name, props) in self.SMART_FOLDERS.items()
         }
 
-        for folder in self._fetch_folders():
-            # FIXME: Handle subfolders
-            if folder["recordName"] in ("----Root-Folder----", "----Project-Root-Folder----") or (
-                folder["fields"].get("isDeleted") and folder["fields"]["isDeleted"]["value"]
-            ):
-                continue
-
-            folder_id = folder["recordName"]
-            folder_obj_type = f"CPLContainerRelationNotDeletedByAssetDate:{folder_id}"
-            folder_name = base64.b64decode(folder["fields"]["albumNameEnc"]["value"]).decode(
-                "utf-8"
-            )
+        for album_path, record in self._fetch_folders():
+            album_id = record["recordName"]
+            album_obj_type = f"CPLContainerRelationNotDeletedByAssetDate:{album_id}"
             query_filter = [
                 {
                     "fieldName": "parentId",
                     "comparator": "EQUALS",
-                    "fieldValue": {"type": "STRING", "value": folder_id},
+                    "fieldValue": {"type": "STRING", "value": album_id},
                 }
             ]
 
@@ -338,31 +350,79 @@ class PhotoLibrary:
                 self.params,
                 self.session,
                 self.service_endpoint,
-                folder_name,
+                album_path,
                 "CPLContainerRelationLiveByAssetDate",
-                folder_obj_type,
+                album_obj_type,
                 query_filter,
                 zone_id=self.zone_id,
             )
-            albums[folder_name] = album
+            albums[album_path] = album
 
         return albums
 
-    def _fetch_folders(self) -> Sequence[Dict[str, Any]]:
+    def _query_folders(self, parent_id: str | None) -> list[Dict[str, Any]]:
+        """Album and folder records directly in the folder parent_id, or at the top level"""
+        url = f"{self.service_endpoint}/records/query?{urlencode(self.params)}"
+        query: Dict[str, Any] = {
+            "query": {"recordType": "CPLAlbumByPositionLive"},
+            "zoneID": self.zone_id,
+        }
+        if parent_id is not None:
+            query["query"]["filterBy"] = [
+                {
+                    "fieldName": "parentId",
+                    "comparator": "EQUALS",
+                    "fieldValue": {"type": "STRING", "value": parent_id},
+                }
+            ]
+        records: list[Dict[str, Any]] = []
+        markers: set[str] = set()
+        while True:
+            request = self.session.post(
+                url, data=json.dumps(query), headers={"Content-type": "text/plain"}
+            )
+            response = request.json()
+            records.extend(response["records"])
+            # iCloud returns the albums in pages; continuationMarker asks for the next one.
+            # A marker seen before would only repeat the same page, so stop there.
+            marker = response.get("continuationMarker")
+            if not marker or marker in markers:
+                break
+            markers.add(marker)
+            query["continuationMarker"] = marker
+
+        return records
+
+    def _fetch_folders(self) -> Sequence[Tuple[str, Dict[str, Any]]]:
+        """Album records with their path, including albums in folders (#482, #1071).
+
+        The album list only holds the top level. The content of a folder (albumType 3)
+        comes from the same query filtered on the folder's id, so folders are walked one
+        level at a time. An album in a folder gets the path "Folder/Subfolder/Album";
+        folders themselves hold no photos and are not returned."""
         if self.library_type == "shared":
             return []
-        url = f"{self.service_endpoint}/records/query?{urlencode(self.params)}"
-        json_data = json.dumps(
-            {
-                "query": {"recordType": "CPLAlbumByPositionLive"},
-                "zoneID": self.zone_id,
-            }
-        )
-
-        request = self.session.post(url, data=json_data, headers={"Content-type": "text/plain"})
-        response = request.json()
-
-        return typing.cast(Sequence[Dict[str, Any]], response["records"])
+        albums: list[Tuple[str, Dict[str, Any]]] = []
+        visited: set[str] = set()
+        pending: list[Tuple[str | None, str]] = [(None, "")]
+        while pending:
+            parent_id, prefix = pending.pop(0)
+            for record in self._query_folders(parent_id):
+                record_id = record["recordName"]
+                fields = record["fields"]
+                if record_id in ("----Root-Folder----", "----Project-Root-Folder----") or (
+                    fields.get("isDeleted") and fields["isDeleted"]["value"]
+                ):
+                    continue
+                name = base64.b64decode(fields["albumNameEnc"]["value"]).decode("utf-8")
+                if fields.get("albumType", {}).get("value") == FOLDER_ALBUM_TYPE:
+                    # a folder listed twice would otherwise be walked forever
+                    if record_id not in visited:
+                        visited.add(record_id)
+                        pending.append((record_id, f"{prefix}{name}/"))
+                else:
+                    albums.append((f"{prefix}{name}", record))
+        return albums
 
     @property
     def all(self) -> "PhotoAlbum":
@@ -374,6 +434,18 @@ class PhotoLibrary:
             self.WHOLE_COLLECTION["list_type"],
             self.WHOLE_COLLECTION["obj_type"],
             query_filter=self.WHOLE_COLLECTION["query_filter"],
+            zone_id=self.zone_id,
+        )
+
+    @property
+    def hidden(self) -> "PhotoAlbum":
+        return PhotoAlbum(
+            self.params,
+            self.session,
+            self.service_endpoint,
+            "Hidden",
+            "CPLAssetAndMasterHiddenByAssetDate",
+            "CPLAssetHiddenByAssetDate",
             zone_id=self.zone_id,
         )
 
@@ -522,6 +594,7 @@ class PhotoAlbum:
 
     @property
     def photos(self) -> Generator["PhotoAsset", Any, None]:
+        previous_master_records: Dict[str, Any] = {}
         while True:
             request = self.photos_request()
 
@@ -537,23 +610,36 @@ class PhotoAlbum:
 
             response = request.json()
 
-            asset_records = {}
-            master_records = []
+            # Iterate per CPLAsset, not per CPLMaster: several assets can share one master (e.g. Photos'
+            # "Duplicate", which copies the asset but not the original file). Apple then returns the master
+            # once and each asset separately, and startRank counts assets. Keying assets by master id kept only
+            # the last asset of such a group (the others were never yielded), and advancing the offset by the
+            # number of masters made the next page start inside this one (one asset yielded twice).
+            asset_records = []
+            master_records: Dict[str, Any] = {}
             for rec in response["records"]:
                 if rec["recordType"] == "CPLAsset":
-                    master_id = rec["fields"]["masterRef"]["value"]["recordName"]
-                    asset_records[master_id] = rec
+                    asset_records.append(rec)
                 elif rec["recordType"] == "CPLMaster":
-                    master_records.append(rec)
+                    master_records[rec["recordName"]] = rec
 
-            master_records_len = len(master_records)
-            if master_records_len:
-                for master_record in master_records:
-                    record_name = master_record["recordName"]
-                    yield PhotoAsset(master_record, asset_records[record_name])
-                    self.increment_offset(1)
-            else:
+            if not asset_records:
                 break
+            for asset_record in asset_records:
+                master_id = asset_record["fields"]["masterRef"]["value"]["recordName"]
+                master_record = master_records.get(master_id) or previous_master_records.get(
+                    master_id
+                )
+                if master_record is None:
+                    logger.warning(
+                        "Skipping asset %s: its master record %s was not returned",
+                        asset_record.get("recordName"),
+                        master_id,
+                    )
+                else:
+                    yield PhotoAsset(master_record, asset_record)
+                self.increment_offset(1)
+            previous_master_records = master_records
 
     def increment_offset(self, value: int) -> None:
         self.offset += value
@@ -733,6 +819,7 @@ class PhotoAsset:
         "public.heif": AssetItemType.IMAGE,
         "public.jpeg": AssetItemType.IMAGE,
         "public.png": AssetItemType.IMAGE,
+        "public.jpeg-xl": AssetItemType.IMAGE,
         "com.apple.quicktime-movie": AssetItemType.MOVIE,
         "com.adobe.raw-image": AssetItemType.IMAGE,
         "com.canon.cr2-raw-image": AssetItemType.IMAGE,
@@ -867,6 +954,15 @@ class PhotoAsset:
         return dt
 
     @property
+    def has_asset_date(self) -> bool:
+        """False when iCloud gave no usable creation date and asset_date fell back to 1970"""
+        try:
+            self._asset_record["fields"]["assetDate"]["value"] / 1000.0
+            return True
+        except (KeyError, TypeError, ValueError):
+            return False
+
+    @property
     def added_date(self) -> datetime:
         dt = datetime.fromtimestamp(
             self._asset_record["fields"]["addedDate"]["value"] / 1000.0, tz=pytz.utc
@@ -896,7 +992,26 @@ class PhotoAsset:
         from foundation.core import compose
         from foundation.string_utils import endswith, lower
 
-        is_image_ext = compose(endswith((".heic", ".png", ".jpg", ".jpeg")), lower)
+        is_image_ext = compose(
+            endswith(
+                (
+                    ".heic",
+                    ".heif",
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".jxl",
+                    ".webp",
+                    ".gif",
+                    ".tif",
+                    ".tiff",
+                    ".avif",
+                    ".bmp",
+                    ".dng",
+                )
+            ),
+            lower,
+        )
 
         if is_image_ext(self.filename):
             return AssetItemType.IMAGE
